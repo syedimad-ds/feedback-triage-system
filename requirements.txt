@@ -1,0 +1,6 @@
+streamlit==1.32.0
+pandas==2.2.1
+crewai
+crewai-tools
+google-generativeai
+litellm
