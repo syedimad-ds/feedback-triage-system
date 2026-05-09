@@ -2,17 +2,40 @@ import streamlit as st
 import pandas as pd
 import os
 import json
+import time
 from datetime import datetime
+import concurrent.futures
 from crewai import Agent, Task, Crew, Process
 
 # Set page config
 st.set_page_config(page_title="Feedback Analysis System", layout="wide")
 
-st.title("Intelligent User Feedback Analysis System")
-st.write("This application uses multiple AI agents to automatically read, categorize, and process user feedback into actionable tickets.")
+st.title("🤖 Intelligent User Feedback Analysis System")
+st.write("Streamlit UI + Fast CrewAI Orchestration (Colab Integrated)")
 
-# Anyone using the deployed app can put their own API Key
-api_key = st.sidebar.text_input("Enter Gemini API Key", type="password", help="Get your API key from Google AI Studio")
+# 1. Try environment variable (Colab)
+api_key = os.environ.get("GEMINI_API_KEY")
+
+# 2. Try Streamlit Secrets (Streamlit Share)
+if not api_key:
+    try:
+        if "GEMINI_API_KEY" in st.secrets:
+            api_key = st.secrets["GEMINI_API_KEY"]
+        elif "GOOGLE_API_KEY" in st.secrets:
+            api_key = st.secrets["GOOGLE_API_KEY"]
+    except Exception:
+        pass
+
+# Always show the sidebar input just in case they want to override or test
+api_key_input = st.sidebar.text_input("Enter Gemini API Key (Overrides Secret/Env)", type="password")
+if api_key_input:
+    api_key = api_key_input
+
+if api_key:
+    os.environ["GEMINI_API_KEY"] = api_key
+else:
+    st.warning("⚠️ API Key not found. Please provide it in the sidebar, Streamlit Secrets, or Colab environment.")
+    st.stop()
 
 def generate_mock_data():
     reviews_data = [
@@ -30,167 +53,171 @@ def generate_mock_data():
         {"email_id": "E003", "subject": "Login Issue", "body": "I can't login since the latest update. It says invalid credentials but I reset my password.", "sender_email": "bob@example.com", "timestamp": "2023-10-03T09:15:00Z", "priority": "High"}
     ]
     pd.DataFrame(emails_data).to_csv("support_emails.csv", index=False)
+    
+    expected_data = [
+        {"source_id": "R001", "source_type": "Review", "category": "Bug", "priority": "Critical", "technical_details": "Crash on data sync, v2.1.3", "suggested_title": "Fix crash during data sync"},
+        {"source_id": "R002", "source_type": "Review", "category": "Feature Request", "priority": "Medium", "technical_details": "N/A", "suggested_title": "Implement Dark Mode"},
+        {"source_id": "E001", "source_type": "Email", "category": "Bug", "priority": "Critical", "technical_details": "iPhone 13, iOS 16, Crash on login", "suggested_title": "Fix immediate crash on login for iOS 16"}
+    ]
+    pd.DataFrame(expected_data).to_csv("expected_classifications.csv", index=False)
 
 @st.cache_data
 def load_data():
-    if not os.path.exists("app_store_reviews.csv") or not os.path.exists("support_emails.csv"):
+    if not os.path.exists("app_store_reviews.csv") or not os.path.exists("support_emails.csv") or not os.path.exists("expected_classifications.csv"):
         generate_mock_data()
-    return pd.read_csv("app_store_reviews.csv"), pd.read_csv("support_emails.csv")
+    return pd.read_csv("app_store_reviews.csv"), pd.read_csv("support_emails.csv"), pd.read_csv("expected_classifications.csv")
 
-reviews_df, emails_df = load_data()
+reviews_df, emails_df, expected_df = load_data()
 
 st.sidebar.header("Configuration")
-process_limit = st.sidebar.slider("Number of items to process", 1, 10, 3)
+process_limit = st.sidebar.slider("Number of items to process", 1, len(reviews_df) + len(emails_df), 5)
 
-def process_feedback(feedback_text, source_type):
-    # CrewAI (via litellm) natively supports "gemini/..." directly without the LangChain wrapper.
-    llm_string = "gemini/gemini-1.5-flash"
-    
-    classifier = Agent(
-        role='Feedback Classifier',
-        goal='Categorize the feedback into Bug, Feature Request, Praise, Complaint, or Spam.',
-        backstory='Expert in reading user feedback and identifying the core intent.',
-        verbose=True,
-        allow_delegation=False,
-        llm=llm_string
-    )
-    
-    analyzer = Agent(
-        role='Technical Analyzer',
-        goal='Extract technical details and determine priority (Critical, High, Medium, Low).',
-        backstory='A seasoned QA engineer who can extract actionable reproduction steps and device info.',
-        verbose=True,
-        allow_delegation=False,
-        llm=llm_string
-    )
-    
-    ticket_creator = Agent(
-        role='Ticket Creator',
-        goal='Generate a structured ticket representation in JSON format.',
-        backstory='An organized product manager who writes clear and concise tickets.',
-        verbose=True,
-        allow_delegation=False,
-        llm=llm_string
-    )
-    
-    quality_critic = Agent(
-        role='Quality Critic',
-        goal='Review generated tickets for completeness and accuracy, outputting final JSON.',
-        backstory='A strict QA lead who ensures all tickets meet formatting standards.',
-        verbose=True,
-        allow_delegation=False,
-        llm=llm_string
-    )
-
-    t1 = Task(
-        description=f"Analyze the following {source_type} feedback: '{feedback_text}'. Classify it strictly into one of: Bug, Feature Request, Praise, Complaint, Spam.",
-        expected_output="A single word or short phrase representing the category.",
-        agent=classifier
-    )
-    
-    t2 = Task(
-        description=f"Based on the feedback: '{feedback_text}', extract technical details (device, OS, version, steps) and assign a priority (Critical, High, Medium, Low).",
-        expected_output="A summary of technical details and the assigned priority.",
-        agent=analyzer
-    )
-    
-    t3 = Task(
-        description="Using the category and technical details, create a ticket. Provide the ticket information in text format including category, priority, technical_details, suggested_title, and description.",
-        expected_output="Draft ticket text.",
-        agent=ticket_creator
-    )
-
-    t4 = Task(
-        description="Review the drafted ticket. Fix any errors and strictly output raw JSON with keys: 'category', 'priority', 'technical_details', 'suggested_title', 'description'. Do not use markdown blocks, just the JSON.",
-        expected_output="A valid JSON string strictly containing the keys: category, priority, technical_details, suggested_title, description.",
-        agent=quality_critic
-    )
-    
-    crew = Crew(
-        agents=[classifier, analyzer, ticket_creator, quality_critic],
-        tasks=[t1, t2, t3, t4],
-        verbose=True,
-        process=Process.sequential
-    )
-    
-    return crew.kickoff()
-
-if st.button("Process Feedback"):
-    if not api_key:
-        st.error("Please provide a Gemini API Key in the sidebar.")
-    else:
-        # CrewAI reads from the GEMINI_API_KEY environment variable.
-        os.environ["GEMINI_API_KEY"] = api_key
-        
-        st.write("### Processing...")
-        items_to_process = []
-        for _, row in reviews_df.iterrows():
-            items_to_process.append({"id": row['review_id'], "type": "Review", "text": f"Rating: {row['rating']}, Text: {row['review_text']}, Version: {row['app_version']}"})
-        
-        for _, row in emails_df.iterrows():
-            items_to_process.append({"id": row['email_id'], "type": "Email", "text": f"Subject: {row['subject']}, Body: {row['body']}"})
-        
-        items_to_process = items_to_process[:process_limit]
-        
-        progress_bar = st.progress(0)
-        processed_data = []
-        processing_logs = []
-        
-        for i, item in enumerate(items_to_process):
-            with st.spinner(f"Processing {item['id']}..."):
-                start_time = datetime.now()
-                try:
-                    res = process_feedback(item['text'], item['type'])
-                    end_time = datetime.now()
-                    
-                    res_str = str(res.raw if hasattr(res, 'raw') else res)
-                    
-                    import re
-                    json_match = re.search(r'\{.*\}', res_str, re.DOTALL)
-                    if json_match:
-                        parsed = json.loads(json_match.group(0))
-                    else:
-                        parsed = json.loads(res_str)
-                    
-                    parsed['source_id'] = item['id']
-                    parsed['source_type'] = item['type']
-                    processed_data.append(parsed)
-                    processing_logs.append({"source_id": item['id'], "status": "Success", "processing_time_sec": (end_time - start_time).seconds})
-                except Exception as e:
-                    end_time = datetime.now()
-                    st.error(f"Failed to process ticket for {item['id']}: {e}")
-                    processed_data.append({"source_id": item['id'], "category": "Error", "raw_output": str(e)})
-                    processing_logs.append({"source_id": item['id'], "status": f"Error: {e}", "processing_time_sec": (end_time - start_time).seconds})
-            
-            progress_bar.progress((i + 1) / len(items_to_process))
-            
-        st.success("Processing Complete!")
-        
-        st.write("### Generated Tickets")
-        res_df = pd.DataFrame(processed_data)
-        st.dataframe(res_df)
-        
-        res_df.to_csv("generated_tickets.csv", index=False)
-        st.write("Saved tickets to `generated_tickets.csv`.")
-        
-        logs_df = pd.DataFrame(processing_logs)
-        logs_df.to_csv("processing_log.csv", index=False)
-        
-        success_count = len([p for p in processing_logs if p['status'] == 'Success'])
-        metrics_df = pd.DataFrame({
-            "Total_Processed": [len(processed_data)],
-            "Success_Count": [success_count],
-            "Success_Rate": [success_count / len(processed_data) if processed_data else 0],
-            "Average_Time_Sec": [logs_df['processing_time_sec'].mean() if not logs_df.empty else 0]
+def get_items_to_process():
+    items = []
+    for _, row in reviews_df.iterrows():
+        items.append({
+            'source_id': str(row.get('review_id', '')),
+            'source_type': 'app_store_review',
+            'platform': str(row.get('platform', '')),
+            'rating': row.get('rating', None),
+            'text': str(row.get('review_text', '')),
+            'subject': '',
+            'app_version': str(row.get('app_version', ''))
         })
-        metrics_df.to_csv("metrics.csv", index=False)
-        
-        st.write("### Metrics")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Processed", len(processed_data))
-        col2.metric("Success Rate", f"{success_count / len(processed_data) * 100:.1f}%" if processed_data else "0%")
-        col3.metric("Avg Processing Time", f"{logs_df['processing_time_sec'].mean():.1f}s" if not logs_df.empty else "0s")
+    for _, row in emails_df.iterrows():
+        items.append({
+            'source_id': str(row.get('email_id', '')),
+            'source_type': 'support_email',
+            'platform': '',
+            'rating': None,
+            'text': str(row.get('body', '')),
+            'subject': str(row.get('subject', '')),
+            'app_version': ''
+        })
+    return items[:process_limit]
 
+# Define LLM Model globally for speed (Flash is the fastest architecture)
+LLM_MODEL_STRING = "gemini/gemini-1.5-flash"
+
+def process_single_item(item):
+    """Processes a single item through CrewAI. Designed to be run in parallel."""
+    try:
+        # AGENTS (Kept lightweight and specific to the task)
+        classifier = Agent(
+            role='Feedback Classifier',
+            goal='Categorize feedback into one category: Bug, Feature Request, Praise, Complaint, or Spam.',
+            backstory='Expert in reading user feedback.',
+            verbose=False, allow_delegation=False, llm=LLM_MODEL_STRING
+        )
+        
+        analyzer = Agent(
+            role='Technical Analyzer',
+            goal='Extract technical details and priority.',
+            backstory='Technical support engineer extracting actionable bugs or feature specifics.',
+            verbose=False, allow_delegation=False, llm=LLM_MODEL_STRING
+        )
+        
+        ticket_creator = Agent(
+            role='Ticket Creator',
+            goal='Draft a structured ticket with a strict JSON format.',
+            backstory='Product manager translating notes to tickets.',
+            verbose=False, allow_delegation=False, llm=LLM_MODEL_STRING
+        )
+        
+        quality_critic = Agent(
+            role='Quality Critic',
+            goal='Review drafted tickets for complete JSON output.',
+            backstory='QA engineer strictly ensuring JSON validity.',
+            verbose=False, allow_delegation=False, llm=LLM_MODEL_STRING
+        )
+
+        # TASKS
+        t1 = Task(
+            description=f"Classify strictly into Bug, Feature Request, Praise, Complaint, Spam: '{item['text']}'. Respond with valid JSON: {{\"category\": \"<Cat>\"}}",
+            expected_output="JSON classification",
+            agent=classifier
+        )
+        
+        t2 = Task(
+            description=f"Extract technical info (device, OS, steps, severity) from: '{item['text']}'. Respond with valid JSON.",
+            expected_output="JSON technical details",
+            agent=analyzer
+        )
+        
+        t3 = Task(
+            description=f"Using the analysis, draft an engineering ticket. Respond with valid JSON: {{\"title\": \"<tag> <title>\", \"description\": \"<desc>\", \"priority\": \"<pri>\"}}",
+            expected_output="JSON ticket draft",
+            agent=ticket_creator
+        )
+
+        t4 = Task(
+            description="Fix any formatting errors in the ticket and output the FINAL valid JSON: {\"category\": \"...\", \"priority\": \"...\", \"title\": \"...\", \"description\": \"...\", \"quality_score\": 9}. Strictly JSON only, no markdown formatting.",
+            expected_output="Final JSON string",
+            agent=quality_critic
+        )
+        
+        crew = Crew(
+            agents=[classifier, analyzer, ticket_creator, quality_critic],
+            tasks=[t1, t2, t3, t4],
+            verbose=False, # Disable verbose to speed up logs
+            process=Process.sequential
+        )
+        
+        res = crew.kickoff()
+        res_str = str(res.raw if hasattr(res, 'raw') else res)
+        
+        import re
+        json_match = re.search(r'\{.*\}', res_str, re.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group(0))
+        else:
+            parsed = json.loads(res_str)
+            
+        parsed['source_id'] = item['source_id']
+        parsed['source_type'] = item['source_type']
+        return parsed
+        
+    except Exception as e:
+        return {"source_id": item['source_id'], "category": "Error", "title": f"Failed: {str(e)}"}
+
+
+if st.button("🚀 Process Feedback Fast (Parallel)"):
+    st.write("### Running CrewAI Agents in Parallel...")
+    items = get_items_to_process()
+    progress_bar = st.progress(0)
+    
+    processed_data = []
+    
+    start_time = time.time()
+    
+    # Run CrewAI processing concurrently to massively speed up pipeline!
+    # Max workers = 4 avoids hitting free-tier API rate limits too quickly
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {executor.submit(process_single_item, item): item for item in items}
+        
+        for i, future in enumerate(concurrent.futures.as_completed(futures)):
+            result = future.result()
+            processed_data.append(result)
+            progress_bar.progress((i + 1) / len(items))
+
+    elapsed = time.time() - start_time
+    st.success(f"⚡ Pipeline Complete in {elapsed:.2f} seconds!")
+    
+    # Display Results
+    res_df = pd.DataFrame(processed_data)
+    st.write("### Generated Tickets")
+    st.dataframe(res_df)
+    res_df.to_csv("generated_tickets.csv", index=False)
+    
+    # Accuracy Check vs Expected
+    st.write("### 📊 Accuracy Evaluation")
+    merged = res_df.merge(expected_df[['source_id', 'category', 'priority']].rename(columns={'category': 'expected_category', 'priority': 'expected_priority'}), on='source_id', how='inner')
+    if not merged.empty and 'category' in merged.columns:
+        cat_correct = (merged['category'].str.lower() == merged['expected_category'].str.lower()).sum()
+        st.metric("Category Accuracy", f"{cat_correct}/{len(merged)} ({100*cat_correct/len(merged):.1f}%)")
+        st.dataframe(merged[['source_id', 'category', 'expected_category', 'title']])
+        
+st.write("---")
 st.write("### Manual Override / Generated Tickets View")
 if os.path.exists("generated_tickets.csv"):
     df_tickets = pd.read_csv("generated_tickets.csv")
@@ -198,5 +225,3 @@ if os.path.exists("generated_tickets.csv"):
     if st.button("Save Changes"):
         edited_df.to_csv("generated_tickets.csv", index=False)
         st.success("Changes saved successfully.")
-else:
-    st.info("No tickets generated yet. Run the processing to see them here.")
