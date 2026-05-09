@@ -10,6 +10,10 @@ from crewai import Agent, Task, Crew, Process
 # Set page config
 st.set_page_config(page_title="Feedback Analysis System", layout="wide")
 
+# Disable CrewAI Telemetry (prevents hanging in Colab/Streamlit)
+os.environ["CREWAI_DISABLE_TELEMETRY"] = "true"
+os.environ["OTEL_SDK_DISABLED"] = "true"
+
 st.title("🤖 Intelligent User Feedback Analysis System")
 st.write("Streamlit UI + Fast CrewAI Orchestration (Colab Integrated)")
 
@@ -181,8 +185,8 @@ def process_single_item(item):
         return {"source_id": item['source_id'], "category": "Error", "title": f"Failed: {str(e)}"}
 
 
-if st.button("🚀 Process Feedback Fast (Parallel)"):
-    st.write("### Running CrewAI Agents in Parallel...")
+if st.button("🚀 Process Feedback (Sequential for Stability)"):
+    st.write("### Running CrewAI Agents...")
     items = get_items_to_process()
     progress_bar = st.progress(0)
     
@@ -190,13 +194,9 @@ if st.button("🚀 Process Feedback Fast (Parallel)"):
     
     start_time = time.time()
     
-    # Run CrewAI processing concurrently to massively speed up pipeline!
-    # Max workers = 4 avoids hitting free-tier API rate limits too quickly
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {executor.submit(process_single_item, item): item for item in items}
-        
-        for i, future in enumerate(concurrent.futures.as_completed(futures)):
-            result = future.result()
+    for i, item in enumerate(items):
+        with st.spinner(f"Analyzing {item['source_id']} ({i+1}/{len(items)})..."):
+            result = process_single_item(item)
             processed_data.append(result)
             progress_bar.progress((i + 1) / len(items))
 
