@@ -1,0 +1,31 @@
+source_id,source_type,category,priority,technical_details,suggested_title
+T_R001,app_store_review,Bug,Critical,"Platform: Google Play, Device: Samsung Galaxy S23, OS: Android 14, Version: 3.2.0, Issue: App crashes on task list open",[BUG] App Crashes on Task List Open - Android 14 v3.2.0
+T_R002,app_store_review,Bug,High,"Platform: App Store, Device: iPhone 15 Pro, OS: iOS 17.4, Version: 3.2.0, Issue: Blank screen after login",[BUG] Login Blank Screen After v3.2.0 Update - iOS
+T_R003,app_store_review,Bug,Critical,"Platform: Google Play, Version: 3.2.0, Issue: Complete data loss after update",[BUG] Complete Data Loss After v3.2.0 Update
+T_R004,app_store_review,Bug,High,"Platform: App Store, OS: iOS 17 + macOS Sonoma, Version: 3.2.0, Issue: Cross-device sync broken",[BUG] Cross-Device Sync Broken - iOS and macOS
+T_R005,app_store_review,Bug,Critical,"Platform: Google Play, Device: Pixel 7, OS: Android 14, Version: 3.2.0, Issue: App freezes on loading screen",[BUG] App Freezes on Loading Screen - Pixel 7 Android 14
+T_R006,app_store_review,Feature Request,Medium,N/A,[FEATURE] Add Dark Mode for Night Usage
+T_R007,app_store_review,Feature Request,Medium,N/A,[FEATURE] Add Calendar View for Task Planning
+T_R008,app_store_review,Feature Request,Medium,N/A,[FEATURE] Add Team Collaboration and Shared Task Lists
+T_R009,app_store_review,Feature Request,Medium,N/A,[FEATURE] Add Home Screen Widget Support
+T_R010,app_store_review,Feature Request,Medium,N/A,[FEATURE] Add Recurring Tasks Support
+T_R011,app_store_review,Praise,Low,N/A,[PRAISE] Excellent App - Transformed Work Management
+T_R012,app_store_review,Praise,Low,N/A,[PRAISE] Love the App - Productivity Doubled
+T_R013,app_store_review,Praise,Low,N/A,[PRAISE] Perfect Task Manager - Flawless Sync
+T_R014,app_store_review,Complaint,Medium,N/A,[COMPLAINT] Subscription Price Too High
+T_R015,app_store_review,Complaint,Medium,N/A,[COMPLAINT] Poor Customer Support Response
+T_R016,app_store_review,Complaint,Medium,N/A,[COMPLAINT] App Performance Degraded After Updates
+T_R017,app_store_review,Spam,Low,N/A,[SPAM] Promotional Spam - Follower Service
+T_R018,app_store_review,Spam,Low,N/A,[SPAM] Incoherent Random Text
+T_R019,app_store_review,Complaint,Medium,N/A,[COMPLAINT] App Feels Outdated Compared to Competitors
+T_R020,app_store_review,Bug,High,"Platform: App Store, Device: iPhone 14, OS: iOS 17.5, Version: 3.2.0, Issue: Notifications not working after iOS update",[BUG] Push Notifications Broken on iOS 17.5
+T_E001,support_email,Bug,Critical,"Device: OnePlus 11, OS: Android 13, Version: 3.2.0, Steps: Open app > Tap task list > Crashes",[BUG] App Crashes on Launch - OnePlus 11 Android 13
+T_E002,support_email,Bug,High,"Device: iPhone 14 Pro, OS: iOS 17.3, Version: 3.2.0, Issue: White screen after login, tried reinstall",[BUG] Login White Screen After v3.2.0 - iPhone 14 Pro
+T_E003,support_email,Bug,Critical,"Device: Samsung Galaxy S22, OS: Android 13, Version: 3.2.0, Issue: All tasks and notes deleted after update",[BUG] Complete Data Loss After Update - Galaxy S22
+T_E004,support_email,Feature Request,Medium,N/A,[FEATURE] Add Offline Mode with Background Sync
+T_E005,support_email,Feature Request,Medium,N/A,[FEATURE] Add Built-in Pomodoro Timer
+T_E006,support_email,Complaint,Medium,N/A,[COMPLAINT] Unjustified Price Increase Without Notice
+T_E007,support_email,Complaint,Medium,N/A,[COMPLAINT] Refund Request - Features Not As Advertised
+T_E008,support_email,Praise,Low,N/A,[PRAISE] Positive Feedback - Best Task Manager Ever Used
+T_E009,support_email,Bug,High,"Device: iPhone 15, OS: iOS 17.5, Version: 3.2.0, Issue: All notifications stopped after iOS update",[BUG] Notifications Broken After iOS 17.5 Update
+T_E010,support_email,Feature Request,Medium,N/A,[FEATURE] Add CSV and PDF Export Functionality
